@@ -362,10 +362,6 @@
 
       bulletsToRemove.sort((a, b) => b - a)
 
-      if (bulletsToRemove.length > 0 || enemiesToRemove.length > 0) {
-        console.log('things to remove', bulletsToRemove, enemiesToRemove)
-      }
-
       for (let index of bulletsToRemove) {
         bullets.splice(index, 1)
       }
