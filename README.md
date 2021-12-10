@@ -1,6 +1,10 @@
 Space Impakto
 =============
 
+Hosted in (just in case one of them expires or something):
+- https://space-impakto.surge.sh/
+- https://psse-cpu.github.io/space-impakto/
+
 Space Impact clone, from scratch, no engines :scream:
 
 The code is hopefully :pray: understandable by freshmen-level SE students.
