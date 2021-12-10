@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+
+  <style>
+    * {
+      margin: 0px;
+      padding: 0px;
+    }
+
+    html, body {
+      height: 100vh;
+      min-height: 100vh;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: black;
+    }
+
+    canvas {
+      background-color: black; 
+      border: 1px solid lightgray;
+      box-shadow: 1px 1px 8px grey;
+      height: calc(100vh - 2px); /* maintain aspect ratio, especially for mobile */
+    }
+
+    #buttons {
+      align-self: flex-start;
+      justify-self: flex-start;
+      position: fixed;
+      top: 10;
+      left: 10;
+    }
+
+    #gameOverDiv {
+      font: bold 96px Orbitron, sans-serif;
+      color: red;
+      background-color: black;
+      width: 100%;
+      text-align: center;
+
+      height: 30vh;
+      min-height: 30vh;
+      display: none;
+    }
+
+    #gameOverDiv div {
+      font-size: 72px;
+      color: white;
+    }
+  </style>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+</head>
+<body onload="initialize()" onkeydown="handleKeypresses(event)" onkeyup="handleKeyRelease()">  
+  <div id="buttons">
+    <button id="aspect-ratio-16-10" onclick="changeAspectRatio(16, 10)">16:10</button>
+    <button id="aspect-ratio-16-9" onclick="changeAspectRatio(16, 9)">16:9</button>
+    <button id="aspect-ratio-3-2" onclick="changeAspectRatio(3, 2)">3:2</button>
+  </div>
+
+  <img src="sprites.png" style="display: none;">
+  <canvas width="1280" height="720"></canvas>
+
+  <div id="gameOverDiv">
+    Game Over!!!
+
+    <div>Thanks for playing Space Impakto!!</div>
+  </div>
+
+  <script>
+    // game-loop-related variables
+    let frames
+    let start
+    let canvas
+    let context
+    let lastFrame
+        
+    // enemy-related variables
+    let spritesheet
+    let enemySpritesTemplates = [
+      {
+        // orange
+        firstSlice: { x: 600, y: 20},
+        sliceSize: { width: 50, height: 40 },
+        gap: 80, // horizontal
+        count: 6,
+        deathSequence: [
+          { x: 232, y: 464 },
+          { x: 336, y: 464 },
+          { x: 1084, y: 20 },
+        ]
+      },
+      {
+        // pink
+        firstSlice: { x: 600, y: 92},
+        sliceSize: { width: 50, height: 40 },
+        gap: 80, // horizontal
+        count: 6,
+        deathSequence: [
+          { x: 652, y: 464 },
+          { x: 748, y: 464 },
+          { x: 1084, y: 92 },
+        ]
+      },
+      {
+        // yellow
+        firstSlice: { x: 600, y: 170},
+        sliceSize: { width: 50, height: 40 },
+        gap: 80, // horizontal
+        count: 6,
+        deathSequence: [
+          { x: 1084, y: 464 },
+          { x: 24, y: 542 },
+          { x: 1084, y: 170 },
+        ]
+      },
+      {
+        // green
+        firstSlice: { x: 20, y: 20},
+        sliceSize: { width: 50, height: 40 },
+        gap: 80, // horizontal
+        count: 6,
+        deathSequence: [
+          { x: 24, y: 464 },
+          { x: 120, y: 464 },
+          { x: 512, y: 20 },
+        ]
+      },
+    ]
+    let lastEnemySpawn = 0
+    let enemies = []
+
+    // player-related variables
+    let spaceship = {
+      x: 0,
+      y: 345,
+      width: 50,
+      height: 30,
+      direction: '', // '', 'up', 'down',
+      movementSpeed: 200,
+      attacking: false,
+    }
+    let score = 0
+    let maxLives = 5
+    let currentLives = 5
+
+    // bullet variables
+    let bullets = []
+    const BULLET_RADIUS = 4
+    const BULLET_SPEED = 500
+
+    function initialize() {
+      // fill-up those empty `let` declarations
+      frames = 0
+      start = Date.now()
+      canvas = document.querySelector('canvas')
+      context = canvas.getContext('2d')
+      lastFrame = Date.now()
+      spritesheet = document.querySelector('img')
+
+      requestAnimationFrame(gameLoop)
+    }
+
+    function update(delta) {
+      moveSpaceship(delta)
+      keepBulletsFlying(delta)
+      animateEnemies(delta)
+      spawnEnemyWaves()
+      checkCollisions()
+      removeMissedBullets()
+      removeCorpses()
+      removeSuccessfulInvaders()
+    }
+
+    function render() {
+      if (currentLives <= 0) {
+        switchToGameOverScreen()
+      } else {
+        context.clearRect(0, 0, canvas.width, canvas.height)
+        
+        drawBullets()
+        drawEnemies()
+        drawSpaceship()
+        drawScore()
+        drawLives()
+      }
+    }
+
+    function changeAspectRatio(horizontal, vertical) {
+      let factor = canvas.height / vertical // 72 * 16
+      canvas.width = factor * horizontal
+    }
+
+    function randomInt(from, to) {
+      return Math.trunc(Math.random() * (to - from + 1)) + from
+    }
+
+    function randomItem(array) {
+      return array[randomInt(0, array.length - 1)]
+    }
+    
+    function handleKeypresses(keyEvent) {
+      switch (keyEvent.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+          spaceship.direction = 'up'
+          break
+        case 'ArrowDown':
+        case 'KeyS':
+          spaceship.direction = 'down'
+          break
+        case 'Space':
+          launchBullet()
+      }
+    }
+
+    function handleKeyRelease() {
+      spaceship.direction = ''
+      spaceship.attacking = false
+    }
+
+    function launchBullet() {
+      bullets.push({
+        x: spaceship.x + spaceship.width + 4,
+        y: spaceship.y + spaceship.height / 2,
+      })
+    }
+
+    function switchToGameOverScreen() {
+      canvas.style.display = 'none'
+      document.querySelector('#gameOverDiv').style.display = 'block'
+    }
+
+    function addEnemies(howMany) {       
+      for (let i = 0; i < howMany; i++) { 
+        let template = randomItem(enemySpritesTemplates)
+
+        enemies.push({
+          x: 1250 + randomInt(-30, 30),
+          y: Math.trunc(Math.random() * 680),
+          isMoving: true,
+          movementSpeed: 100,
+          sprite: template,
+          deathSprites: template.deathSequence,
+          width: template.sliceSize.width,
+          height: template.sliceSize.height,
+          lastAnimationChange: Date.now(),
+          spriteIndex: 0,
+          animationSpeed: 200,
+          alive: true,
+          deathAnimationPlayed: false,
+        })
+      }
+    }
+
+    function animateSprite(enemy) {
+      let now = Date.now()
+
+      if (now - enemy.lastAnimationChange >= enemy.animationSpeed) {
+        if (!enemy.alive && !enemy.deathAnimationPlayed) {
+          enemy.spriteIndex += 1
+
+          if (enemy.spriteIndex > 2) {
+            enemy.spriteIndex = 2 // make sure doesn't exceed
+            enemy.deathAnimationPlayed = true
+          }
+        } else if (enemy.isMoving && enemy.alive) {      
+          // another way to make sure it doesn't exceed is modulus
+          enemy.spriteIndex = (enemy.spriteIndex + 1) % enemy.sprite.count
+        }
+
+        enemy.lastAnimationChange = now
+      }      
+    }
+  
+    function animateEnemies(delta) {
+      for (let i = 0; i < enemies.length; i++) {
+        enemies[i].x -= enemies[i].movementSpeed * delta
+        animateSprite(enemies[i])
+      }
+    }
+
+    function moveSpaceship(delta) {
+      if (spaceship.direction === 'up') {
+        spaceship.y -= spaceship.movementSpeed * delta
+      }
+      else if (spaceship.direction === 'down') {
+        spaceship.y += spaceship.movementSpeed * delta
+      }
+    }
+    
+    function keepBulletsFlying(delta) {
+      for (let bullet of bullets) {
+        bullet.x += BULLET_SPEED * delta
+      }
+    }
+
+    function spawnEnemyWaves() {
+      let now = Date.now()
+
+      if (now - lastEnemySpawn >= 3_000) {
+        addEnemies(randomInt(3, 5))
+        lastEnemySpawn = now
+      }
+    }
+
+    function removeMissedBullets() {
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        if (bullets[i].x >= canvas.width) {
+          bullets.splice(i, 1) // safe because looping backwards
+        }
+      }
+    }
+
+    function removeSuccessfulInvaders() {
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        if (enemies[i].x <= 0) {
+          enemies.splice(i, 1) // safe because looping backwards
+          currentLives--
+        }
+      }
+    }
+
+    function checkCollisions() {
+      let bulletsToRemove = []
+      let enemiesToRemove = []
+
+      for (let bullet of bullets) {
+        for (let enemy of enemies) {
+          if (enemy.alive && hasCollision(bullet, enemy)) {
+            bulletsToRemove.push(bullets.indexOf(bullet))
+            enemy.alive = false
+            enemy.spriteIndex = 0
+            score += 10
+          }
+        }
+      }
+
+      bulletsToRemove.sort((a, b) => b - a)
+
+      if (bulletsToRemove.length > 0 || enemiesToRemove.length > 0) {
+        console.log('things to remove', bulletsToRemove, enemiesToRemove)
+      }
+
+      for (let index of bulletsToRemove) {
+        bullets.splice(index, 1)
+      }
+    }
+
+    function removeCorpses() {
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        let enemy = enemies[i]
+
+        if (!enemy.alive && enemy.deathAnimationPlayed) {
+          enemies.splice(i, 1)
+        }
+      }
+    }
+
+    function hasCollision(bullet, enemy) {
+      // just checking if rectangles intersect
+      let bulletX1 = bullet.x - BULLET_RADIUS // left edge
+      let bulletY1 = bullet.y - BULLET_RADIUS // top edge
+      let bulletX2 = bullet.x + BULLET_RADIUS // right edge
+      let bulletY2 = bullet.y + BULLET_RADIUS // bottom edge
+
+      let enemyX1 = enemy.x // left edge
+      let enemyY1 = enemy.y // top edge
+      let enemyX2 = enemy.x + enemy.width // right edge
+      let enemyY2 = enemy.y + enemy.height // bottom edge
+
+      if (bulletX1 > enemyX2 || enemyX1 > bulletX2 ||
+          bulletY1 > enemyY2 || enemyY1 > bulletY2) {
+        return false
+      }
+
+      return true
+    }
+
+    function drawEnemies() {
+      for (let i = 0; i < enemies.length; i++) {
+        if (enemies[i].alive) {
+          context.drawImage(
+            spritesheet,
+
+            // source X (X of the image)
+            enemies[i].sprite.gap * enemies[i].spriteIndex + enemies[i].sprite.firstSlice.x,
+
+            enemies[i].sprite.firstSlice.y, // source Y
+            enemies[i].width,  // source width
+            enemies[i].height, // source height
+            enemies[i].x,
+            enemies[i].y,
+            enemies[i].width,
+            enemies[i].height,
+          )
+        } else {
+          context.drawImage(
+            spritesheet,
+            enemies[i].deathSprites[enemies[i].spriteIndex].x,
+            enemies[i].deathSprites[enemies[i].spriteIndex].y,
+            enemies[i].width,  // source width
+            enemies[i].height, // source height
+            enemies[i].x,
+            enemies[i].y,
+            enemies[i].width,
+            enemies[i].height,
+          )
+        }
+      }
+    }
+
+    function drawSpaceship() {
+      context.fillStyle = 'orange'
+      context.fillRect(
+        spaceship.x,
+        spaceship.y,
+        spaceship.width,
+        spaceship.height,
+      )
+    }
+
+    function drawBullets() {
+      context.fillStyle = 'palegoldenrod'
+      context.strokeStyle = 'darkorange'
+      
+      for (let i = 0; i < bullets.length; i++) {
+        let bullet = bullets[i]
+        context.beginPath()
+        context.arc(bullet.x, bullet.y, BULLET_RADIUS, 0, 2 * Math.PI)
+        context.fill()
+        context.stroke()
+      }
+    }
+
+    function drawScore() {
+      context.fillStyle = 'whitesmoke'
+      context.font = 'bold 28px Orbitron, "sans-serif"'
+      context.fillText(String(score).padStart(5, '0'), canvas.width - 130, 30)
+    }
+
+    function drawLives() {
+      context.fillStyle = 'red'
+      context.strokeStyle = 'red'
+      context.font = '32px Orbitron, "sans-serif"'
+
+      // solid hearts (remaining lives)
+      context.fillText(
+        "♥".repeat(currentLives),
+        20,
+        34
+      )
+
+      // hollow hearts (lives lost)
+      context.strokeText(
+        "♥".repeat(maxLives - currentLives),
+        20 + (currentLives) * 32,
+        34
+      )
+    }
+
+    function gameLoop(now) {
+      let current = Date.now()
+      let elapsed = current - start
+      let delta = (current - lastFrame) / 1000
+      lastFrame = current
+
+      update(delta)
+      render()
+
+      if (currentLives > 0) { // continue game loop until lives run out (game over)
+        requestAnimationFrame(gameLoop)
+      }
+    }
+  </script>
+</body>
+</html>
