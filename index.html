@@ -171,6 +171,20 @@
       requestAnimationFrame(gameLoop)
     }
 
+    function gameLoop(now) {
+      let current = Date.now()
+      let elapsed = current - start
+      let delta = (current - lastFrame) / 1000
+      lastFrame = current
+
+      update(delta)
+      render()
+
+      if (currentLives > 0) { // continue game loop until lives run out (game over)
+        requestAnimationFrame(gameLoop)
+      }
+    }
+
     function update(delta) {
       moveSpaceship(delta)
       keepBulletsFlying(delta)
@@ -467,20 +481,6 @@
         20 + (currentLives) * 32,
         34
       )
-    }
-
-    function gameLoop(now) {
-      let current = Date.now()
-      let elapsed = current - start
-      let delta = (current - lastFrame) / 1000
-      lastFrame = current
-
-      update(delta)
-      render()
-
-      if (currentLives > 0) { // continue game loop until lives run out (game over)
-        requestAnimationFrame(gameLoop)
-      }
     }
   </script>
 </body>
