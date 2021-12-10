@@ -1,8 +1,9 @@
 Space Impakto
 =============
 
-Space Impact clone, with code hopefully :pray: understandable by freshmen-level
-SE students.
+Space Impact clone, from scratch, no engines :scream:
+
+The code is hopefully :pray: understandable by freshmen-level SE students.
 
 - functions
 - objects
