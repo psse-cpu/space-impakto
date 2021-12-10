@@ -17,4 +17,4 @@ Credits
 
 Spritesheet courtesy of [The Spriters Resource](https://www.spriters-resource.com/mobile/arkanoidvsspaceinvaders/sheet/115283/)
 
-[Games from Scratch Tutorial in JS](spicyyoghurt.com/tutorials/html5-javascript-game-development/create-a-proper-game-loop-with-requestanimationframe)
+[Games from Scratch Tutorial in JS](https://spicyyoghurt.com/tutorials/html5-javascript-game-development/create-a-proper-game-loop-with-requestanimationframe)
